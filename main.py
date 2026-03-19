@@ -23,6 +23,84 @@ from PyQt6.QtWidgets import (
 
 getcontext().prec = 28
 
+LIGHT_THEME = {
+    "window_bg": "#f3f3f3",
+    "text_primary": "#1f1f1f",
+    "card_bg": "#fbfbfb",
+    "card_border": "#e4e4e4",
+    "button_border": "#dadada",
+    "number_bg": "#ffffff",
+    "number_hover": "#f5f5f5",
+    "number_pressed": "#ececec",
+    "action_bg": "#f0f0f0",
+    "action_hover": "#e8e8e8",
+    "action_pressed": "#dddddd",
+    "equal_bg": "#8fb9ff",
+    "equal_hover": "#84b1ff",
+    "equal_pressed": "#76a6fc",
+    "equal_fg": "#0b1f44",
+    "memory_fg": "#505050",
+    "memory_hover": "#e9e9e9",
+    "memory_disabled": "#b0b0b0",
+    "header_hover": "#e9e9e9",
+    "header_checked": "#e0e0e0",
+    "ghost_fg": "#4f4f4f",
+    "ghost_hover": "#ececec",
+    "ghost_disabled": "#b8b8b8",
+    "history_item_hover": "#f1f4f9",
+    "history_item_selected": "#e8f0ff",
+    "secondary_fg": "#707070",
+    "muted_fg": "#7d7d7d",
+    "memory_indicator_fg": "#6e6e6e",
+    "icon_fg": "#3e3e3e",
+    "theme_bg": "#ffffff",
+    "theme_hover": "#f1f1f1",
+    "theme_fg": "#2f2f2f",
+    "theme_border": "#d4d4d4",
+    "theme_checked_bg": "#dce9ff",
+    "theme_checked_border": "#7eaefb",
+    "theme_checked_fg": "#123564",
+}
+
+DARK_THEME = {
+    "window_bg": "#181818",
+    "text_primary": "#f3f3f3",
+    "card_bg": "#212121",
+    "card_border": "#353535",
+    "button_border": "#3f3f3f",
+    "number_bg": "#2b2b2b",
+    "number_hover": "#343434",
+    "number_pressed": "#3d3d3d",
+    "action_bg": "#323232",
+    "action_hover": "#3a3a3a",
+    "action_pressed": "#464646",
+    "equal_bg": "#4f8cff",
+    "equal_hover": "#5b96ff",
+    "equal_pressed": "#6aa0ff",
+    "equal_fg": "#ffffff",
+    "memory_fg": "#d0d0d0",
+    "memory_hover": "#2e2e2e",
+    "memory_disabled": "#747474",
+    "header_hover": "#2d2d2d",
+    "header_checked": "#3a3a3a",
+    "ghost_fg": "#d5d5d5",
+    "ghost_hover": "#303030",
+    "ghost_disabled": "#757575",
+    "history_item_hover": "#293342",
+    "history_item_selected": "#324259",
+    "secondary_fg": "#a7a7a7",
+    "muted_fg": "#8f8f8f",
+    "memory_indicator_fg": "#b1b1b1",
+    "icon_fg": "#f3f3f3",
+    "theme_bg": "#252525",
+    "theme_hover": "#313131",
+    "theme_fg": "#f1f1f1",
+    "theme_border": "#414141",
+    "theme_checked_bg": "#143968",
+    "theme_checked_border": "#4f8cff",
+    "theme_checked_fg": "#f4f8ff",
+}
+
 
 class CalculatorButton(QPushButton):
     def __init__(self, text: str, role: str, min_height: int = 66) -> None:
@@ -37,20 +115,19 @@ class CalculatorButton(QPushButton):
 class HistoryEntryWidget(QWidget):
     def __init__(self, expression: str, result: str) -> None:
         super().__init__()
-        self.setStyleSheet("background: transparent;")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(2)
 
         expression_label = QLabel(expression)
+        expression_label.setObjectName("historyExpressionLabel")
         expression_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        expression_label.setStyleSheet("color: #7a7a7a; font-size: 12px;")
 
         result_label = QLabel(result)
+        result_label.setObjectName("historyResultLabel")
         result_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         result_label.setFont(QFont("Segoe UI Semibold", 18))
-        result_label.setStyleSheet("color: #1f1f1f;")
 
         layout.addWidget(expression_label)
         layout.addWidget(result_label)
@@ -73,6 +150,7 @@ class CalculatorWindow(QMainWindow):
         self.memory_value = Decimal("0")
         self.memory_has_value = False
         self.memory_buttons: dict[str, QPushButton] = {}
+        self.current_theme = "light"
 
         self.compact_width = 430
         self.expanded_width = 720
@@ -80,6 +158,7 @@ class CalculatorWindow(QMainWindow):
         self.expression_label: QLabel
         self.result_label: QLabel
         self.memory_indicator_label: QLabel
+        self.theme_toggle_button: QPushButton
         self.history_toggle_button: QPushButton
         self.history_frame: QFrame
         self.history_list: QListWidget
@@ -91,126 +170,11 @@ class CalculatorWindow(QMainWindow):
         self.resize(self.compact_width, 760)
 
         self.build_ui()
+        self.apply_theme()
         self.update_display()
         self.update_history_state()
 
     def build_ui(self) -> None:
-        self.setStyleSheet(
-            """
-            QMainWindow {
-                background-color: #f3f3f3;
-            }
-            QLabel {
-                color: #1f1f1f;
-            }
-            QFrame#displayFrame,
-            QFrame#historyFrame {
-                background-color: #fbfbfb;
-                border: 1px solid #e4e4e4;
-                border-radius: 20px;
-            }
-            QPushButton {
-                border-radius: 16px;
-                border: 1px solid #dadada;
-                font-size: 20px;
-                color: #1f1f1f;
-            }
-            QPushButton#numberButton {
-                background-color: #ffffff;
-            }
-            QPushButton#numberButton:hover {
-                background-color: #f5f5f5;
-            }
-            QPushButton#numberButton:pressed {
-                background-color: #ececec;
-            }
-            QPushButton#actionButton,
-            QPushButton#operatorButton {
-                background-color: #f0f0f0;
-            }
-            QPushButton#actionButton:hover,
-            QPushButton#operatorButton:hover {
-                background-color: #e8e8e8;
-            }
-            QPushButton#actionButton:pressed,
-            QPushButton#operatorButton:pressed {
-                background-color: #dddddd;
-            }
-            QPushButton#equalButton {
-                background-color: #8fb9ff;
-                border-color: #7eaefb;
-                color: #0b1f44;
-                font-weight: 600;
-            }
-            QPushButton#equalButton:hover {
-                background-color: #84b1ff;
-            }
-            QPushButton#equalButton:pressed {
-                background-color: #76a6fc;
-            }
-            QPushButton#memoryButton {
-                background-color: transparent;
-                border: none;
-                color: #505050;
-                font-size: 15px;
-                padding: 6px 0;
-            }
-            QPushButton#memoryButton:hover {
-                background-color: #e9e9e9;
-                border-radius: 10px;
-            }
-            QPushButton#memoryButton:disabled {
-                color: #b0b0b0;
-            }
-            QPushButton#headerIconButton {
-                background-color: transparent;
-                border: none;
-                border-radius: 12px;
-                min-width: 40px;
-                max-width: 40px;
-                min-height: 40px;
-                max-height: 40px;
-                padding: 0;
-            }
-            QPushButton#headerIconButton:hover {
-                background-color: #e9e9e9;
-            }
-            QPushButton#headerIconButton:checked {
-                background-color: #e0e0e0;
-            }
-            QPushButton#ghostButton {
-                background-color: transparent;
-                border: none;
-                color: #4f4f4f;
-                font-size: 13px;
-                padding: 4px 8px;
-            }
-            QPushButton#ghostButton:hover {
-                background-color: #ececec;
-                border-radius: 10px;
-            }
-            QPushButton#ghostButton:disabled {
-                color: #b8b8b8;
-            }
-            QListWidget#historyList {
-                background: transparent;
-                border: none;
-                outline: none;
-                padding: 0;
-            }
-            QListWidget#historyList::item {
-                border-radius: 14px;
-                margin: 4px 0;
-            }
-            QListWidget#historyList::item:hover {
-                background-color: #f1f4f9;
-            }
-            QListWidget#historyList::item:selected {
-                background-color: #e8f0ff;
-            }
-            """
-        )
-
         root = QWidget()
         root.setFont(QFont("Segoe UI", 11))
         self.setCentralWidget(root)
@@ -231,15 +195,28 @@ class CalculatorWindow(QMainWindow):
         title_box.setSpacing(2)
 
         title_label = QLabel("Calculadora")
+        title_label.setObjectName("titleLabel")
         title_label.setFont(QFont("Segoe UI Semibold", 11))
 
         mode_label = QLabel("Padrão")
         mode_label.setFont(QFont("Segoe UI Semibold", 22))
+        mode_label.setObjectName("modeLabel")
 
         title_box.addWidget(title_label)
         title_box.addWidget(mode_label)
         header_layout.addLayout(title_box)
         header_layout.addStretch()
+
+        self.theme_toggle_button = QPushButton()
+        self.theme_toggle_button.setObjectName("themeToggleButton")
+        self.theme_toggle_button.setCheckable(True)
+        self.theme_toggle_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.theme_toggle_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.theme_toggle_button.setMinimumHeight(40)
+        self.theme_toggle_button.setMinimumWidth(92)
+        self.theme_toggle_button.setToolTip("Alternar entre modo Light e Dark")
+        self.theme_toggle_button.toggled.connect(self.set_theme_from_toggle)
+        header_layout.addWidget(self.theme_toggle_button)
 
         self.history_toggle_button = QPushButton()
         self.history_toggle_button.setObjectName("headerIconButton")
@@ -263,10 +240,12 @@ class CalculatorWindow(QMainWindow):
         expression_row.setSpacing(8)
 
         self.memory_indicator_label = QLabel("")
+        self.memory_indicator_label.setObjectName("memoryIndicatorLabel")
         self.memory_indicator_label.setStyleSheet("color: #6e6e6e; font-size: 14px;")
         self.memory_indicator_label.setFixedWidth(18)
 
         self.expression_label = QLabel("")
+        self.expression_label.setObjectName("expressionLabel")
         self.expression_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.expression_label.setStyleSheet("color: #707070; font-size: 15px;")
 
@@ -326,6 +305,7 @@ class CalculatorWindow(QMainWindow):
 
         history_title = QLabel("Histórico")
         history_title.setFont(QFont("Segoe UI Semibold", 16))
+        history_title.setObjectName("sectionTitleLabel")
 
         self.clear_history_button = QPushButton("Limpar")
         self.clear_history_button.setObjectName("ghostButton")
@@ -337,6 +317,7 @@ class CalculatorWindow(QMainWindow):
 
         self.empty_history_label = QLabel("Nenhum cálculo ainda")
         self.empty_history_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.empty_history_label.setObjectName("emptyStateLabel")
         self.empty_history_label.setStyleSheet("color: #7d7d7d; font-size: 13px;")
 
         self.history_list = QListWidget()
@@ -352,14 +333,187 @@ class CalculatorWindow(QMainWindow):
         root_layout.addWidget(calculator_widget, 1)
         root_layout.addWidget(self.history_frame)
 
-    def create_history_icon(self, size: int = 22) -> QIcon:
+    def set_theme_from_toggle(self, checked: bool) -> None:
+        self.current_theme = "dark" if checked else "light"
+        self.apply_theme()
+
+    def theme_colors(self) -> dict[str, str]:
+        return DARK_THEME if self.current_theme == "dark" else LIGHT_THEME
+
+    def build_stylesheet(self, colors: dict[str, str]) -> str:
+        return f"""
+            QMainWindow {{
+                background-color: {colors["window_bg"]};
+            }}
+            QLabel {{
+                color: {colors["text_primary"]};
+            }}
+            QLabel#historyExpressionLabel {{
+                color: {colors["secondary_fg"]};
+                font-size: 12px;
+            }}
+            QLabel#historyResultLabel {{
+                color: {colors["text_primary"]};
+            }}
+            QFrame#displayFrame,
+            QFrame#historyFrame {{
+                background-color: {colors["card_bg"]};
+                border: 1px solid {colors["card_border"]};
+                border-radius: 20px;
+            }}
+            QPushButton {{
+                border-radius: 16px;
+                border: 1px solid {colors["button_border"]};
+                font-size: 20px;
+                color: {colors["text_primary"]};
+            }}
+            QPushButton#numberButton {{
+                background-color: {colors["number_bg"]};
+            }}
+            QPushButton#numberButton:hover {{
+                background-color: {colors["number_hover"]};
+            }}
+            QPushButton#numberButton:pressed {{
+                background-color: {colors["number_pressed"]};
+            }}
+            QPushButton#actionButton,
+            QPushButton#operatorButton {{
+                background-color: {colors["action_bg"]};
+            }}
+            QPushButton#actionButton:hover,
+            QPushButton#operatorButton:hover {{
+                background-color: {colors["action_hover"]};
+            }}
+            QPushButton#actionButton:pressed,
+            QPushButton#operatorButton:pressed {{
+                background-color: {colors["action_pressed"]};
+            }}
+            QPushButton#equalButton {{
+                background-color: {colors["equal_bg"]};
+                border-color: {colors["equal_bg"]};
+                color: {colors["equal_fg"]};
+                font-weight: 600;
+            }}
+            QPushButton#equalButton:hover {{
+                background-color: {colors["equal_hover"]};
+            }}
+            QPushButton#equalButton:pressed {{
+                background-color: {colors["equal_pressed"]};
+            }}
+            QPushButton#memoryButton {{
+                background-color: transparent;
+                border: none;
+                color: {colors["memory_fg"]};
+                font-size: 15px;
+                padding: 6px 0;
+            }}
+            QPushButton#memoryButton:hover {{
+                background-color: {colors["memory_hover"]};
+                border-radius: 10px;
+            }}
+            QPushButton#memoryButton:disabled {{
+                color: {colors["memory_disabled"]};
+            }}
+            QPushButton#themeToggleButton {{
+                background-color: {colors["theme_bg"]};
+                color: {colors["theme_fg"]};
+                border: 1px solid {colors["theme_border"]};
+                border-radius: 12px;
+                font-size: 13px;
+                font-weight: 600;
+                padding: 0 14px;
+            }}
+            QPushButton#themeToggleButton:hover {{
+                background-color: {colors["theme_hover"]};
+            }}
+            QPushButton#themeToggleButton:checked {{
+                background-color: {colors["theme_checked_bg"]};
+                color: {colors["theme_checked_fg"]};
+                border-color: {colors["theme_checked_border"]};
+            }}
+            QPushButton#headerIconButton {{
+                background-color: transparent;
+                border: none;
+                border-radius: 12px;
+                min-width: 40px;
+                max-width: 40px;
+                min-height: 40px;
+                max-height: 40px;
+                padding: 0;
+            }}
+            QPushButton#headerIconButton:hover {{
+                background-color: {colors["header_hover"]};
+            }}
+            QPushButton#headerIconButton:checked {{
+                background-color: {colors["header_checked"]};
+            }}
+            QPushButton#ghostButton {{
+                background-color: transparent;
+                border: none;
+                color: {colors["ghost_fg"]};
+                font-size: 13px;
+                padding: 4px 8px;
+            }}
+            QPushButton#ghostButton:hover {{
+                background-color: {colors["ghost_hover"]};
+                border-radius: 10px;
+            }}
+            QPushButton#ghostButton:disabled {{
+                color: {colors["ghost_disabled"]};
+            }}
+            QListWidget#historyList {{
+                background: transparent;
+                border: none;
+                outline: none;
+                padding: 0;
+            }}
+            QListWidget#historyList::item {{
+                border-radius: 14px;
+                margin: 4px 0;
+            }}
+            QListWidget#historyList::item:hover {{
+                background-color: {colors["history_item_hover"]};
+            }}
+            QListWidget#historyList::item:selected {{
+                background-color: {colors["history_item_selected"]};
+            }}
+        """
+
+    def apply_theme(self) -> None:
+        colors = self.theme_colors()
+        is_dark = self.current_theme == "dark"
+
+        self.setStyleSheet(self.build_stylesheet(colors))
+        self.theme_toggle_button.setText("Dark" if is_dark else "Light")
+        self.theme_toggle_button.setToolTip(
+            "Alternar para modo Light" if is_dark else "Alternar para modo Dark"
+        )
+        self.history_toggle_button.setIcon(self.create_history_icon(color=colors["icon_fg"]))
+
+        self.memory_indicator_label.setStyleSheet(
+            f"color: {colors['memory_indicator_fg']}; font-size: 14px;"
+        )
+        self.expression_label.setStyleSheet(
+            f"color: {colors['secondary_fg']}; font-size: 15px;"
+        )
+        self.empty_history_label.setStyleSheet(
+            f"color: {colors['muted_fg']}; font-size: 13px;"
+        )
+
+    def create_history_icon(self, size: int = 22, color: str | None = None) -> QIcon:
         pixmap = QPixmap(size, size)
         pixmap.fill(Qt.GlobalColor.transparent)
 
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        pen = QPen(QColor("#3e3e3e"), 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+        pen = QPen(
+            QColor(color or self.theme_colors()["icon_fg"]),
+            2.0,
+            Qt.PenStyle.SolidLine,
+            Qt.PenCapStyle.RoundCap,
+            Qt.PenJoinStyle.RoundJoin,
+        )
         painter.setPen(pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
 
