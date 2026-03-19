@@ -8,6 +8,7 @@ Calculadora desktop em PyQt6 inspirada na calculadora padrão da Microsoft, com 
 - Funções extras: porcentagem, inverso, quadrado, raiz quadrada e troca de sinal
 - Ações de edição: `CE`, `C` e apagar último dígito
 - Memória: `MC`, `MR`, `M+`, `M-` e `MS`
+- Histórico de cálculos com botão de ícone no topo
 - Atalhos de teclado para números, operadores, `Enter`, `Backspace`, `Delete`, `Esc` e `F9`
 
 ## Como executar

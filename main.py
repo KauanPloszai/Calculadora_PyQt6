@@ -3,14 +3,16 @@ from __future__ import annotations
 import sys
 from decimal import Decimal, InvalidOperation, getcontext
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont, QKeyEvent
+from PyQt6.QtCore import QPointF, QRectF, QSize, Qt
+from PyQt6.QtGui import QColor, QFont, QIcon, QKeyEvent, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QPushButton,
     QSizePolicy,
@@ -32,6 +34,28 @@ class CalculatorButton(QPushButton):
         self.setMinimumHeight(min_height)
 
 
+class HistoryEntryWidget(QWidget):
+    def __init__(self, expression: str, result: str) -> None:
+        super().__init__()
+        self.setStyleSheet("background: transparent;")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(2)
+
+        expression_label = QLabel(expression)
+        expression_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        expression_label.setStyleSheet("color: #7a7a7a; font-size: 12px;")
+
+        result_label = QLabel(result)
+        result_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        result_label.setFont(QFont("Segoe UI Semibold", 18))
+        result_label.setStyleSheet("color: #1f1f1f;")
+
+        layout.addWidget(expression_label)
+        layout.addWidget(result_label)
+
+
 class CalculatorWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
@@ -50,16 +74,25 @@ class CalculatorWindow(QMainWindow):
         self.memory_has_value = False
         self.memory_buttons: dict[str, QPushButton] = {}
 
+        self.compact_width = 430
+        self.expanded_width = 720
+
         self.expression_label: QLabel
         self.result_label: QLabel
         self.memory_indicator_label: QLabel
+        self.history_toggle_button: QPushButton
+        self.history_frame: QFrame
+        self.history_list: QListWidget
+        self.empty_history_label: QLabel
+        self.clear_history_button: QPushButton
 
         self.setWindowTitle("Calculadora")
         self.setMinimumSize(420, 720)
-        self.resize(430, 760)
+        self.resize(self.compact_width, 760)
 
         self.build_ui()
         self.update_display()
+        self.update_history_state()
 
     def build_ui(self) -> None:
         self.setStyleSheet(
@@ -70,7 +103,8 @@ class CalculatorWindow(QMainWindow):
             QLabel {
                 color: #1f1f1f;
             }
-            QFrame#displayFrame {
+            QFrame#displayFrame,
+            QFrame#historyFrame {
                 background-color: #fbfbfb;
                 border: 1px solid #e4e4e4;
                 border-radius: 20px;
@@ -128,6 +162,52 @@ class CalculatorWindow(QMainWindow):
             QPushButton#memoryButton:disabled {
                 color: #b0b0b0;
             }
+            QPushButton#headerIconButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 12px;
+                min-width: 40px;
+                max-width: 40px;
+                min-height: 40px;
+                max-height: 40px;
+                padding: 0;
+            }
+            QPushButton#headerIconButton:hover {
+                background-color: #e9e9e9;
+            }
+            QPushButton#headerIconButton:checked {
+                background-color: #e0e0e0;
+            }
+            QPushButton#ghostButton {
+                background-color: transparent;
+                border: none;
+                color: #4f4f4f;
+                font-size: 13px;
+                padding: 4px 8px;
+            }
+            QPushButton#ghostButton:hover {
+                background-color: #ececec;
+                border-radius: 10px;
+            }
+            QPushButton#ghostButton:disabled {
+                color: #b8b8b8;
+            }
+            QListWidget#historyList {
+                background: transparent;
+                border: none;
+                outline: none;
+                padding: 0;
+            }
+            QListWidget#historyList::item {
+                border-radius: 14px;
+                margin: 4px 0;
+            }
+            QListWidget#historyList::item:hover {
+                background-color: #f1f4f9;
+            }
+            QListWidget#historyList::item:selected {
+                background-color: #e8f0ff;
+            }
             """
         )
 
@@ -135,8 +215,13 @@ class CalculatorWindow(QMainWindow):
         root.setFont(QFont("Segoe UI", 11))
         self.setCentralWidget(root)
 
-        main_layout = QVBoxLayout(root)
-        main_layout.setContentsMargins(18, 18, 18, 18)
+        root_layout = QHBoxLayout(root)
+        root_layout.setContentsMargins(18, 18, 18, 18)
+        root_layout.setSpacing(14)
+
+        calculator_widget = QWidget()
+        main_layout = QVBoxLayout(calculator_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(12)
 
         header_layout = QHBoxLayout()
@@ -146,21 +231,25 @@ class CalculatorWindow(QMainWindow):
         title_box.setSpacing(2)
 
         title_label = QLabel("Calculadora")
-        title_font = QFont("Segoe UI Semibold", 11)
-        title_label.setFont(title_font)
+        title_label.setFont(QFont("Segoe UI Semibold", 11))
 
         mode_label = QLabel("Padrão")
-        mode_font = QFont("Segoe UI Semibold", 22)
-        mode_label.setFont(mode_font)
+        mode_label.setFont(QFont("Segoe UI Semibold", 22))
 
         title_box.addWidget(title_label)
         title_box.addWidget(mode_label)
         header_layout.addLayout(title_box)
         header_layout.addStretch()
 
-        hint_label = QLabel("F9 alterna sinal")
-        hint_label.setStyleSheet("color: #707070; font-size: 12px;")
-        header_layout.addWidget(hint_label)
+        self.history_toggle_button = QPushButton()
+        self.history_toggle_button.setObjectName("headerIconButton")
+        self.history_toggle_button.setCheckable(True)
+        self.history_toggle_button.setIcon(self.create_history_icon())
+        self.history_toggle_button.setIconSize(QSize(22, 22))
+        self.history_toggle_button.setToolTip("Mostrar histórico")
+        self.history_toggle_button.clicked.connect(self.toggle_history)
+        header_layout.addWidget(self.history_toggle_button)
+
         main_layout.addLayout(header_layout)
 
         display_frame = QFrame()
@@ -186,8 +275,7 @@ class CalculatorWindow(QMainWindow):
 
         self.result_label = QLabel("0")
         self.result_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        result_font = QFont("Segoe UI Semibold", 34)
-        self.result_label.setFont(result_font)
+        self.result_label.setFont(QFont("Segoe UI Semibold", 34))
 
         display_layout.addLayout(expression_row)
         display_layout.addStretch()
@@ -220,12 +308,73 @@ class CalculatorWindow(QMainWindow):
 
         for row_index, row in enumerate(rows):
             for column_index, label in enumerate(row):
-                role = self.button_role(label)
-                button = CalculatorButton(label, role)
+                button = CalculatorButton(label, self.button_role(label))
                 button.clicked.connect(lambda checked=False, action=label: self.handle_action(action))
                 grid_layout.addWidget(button, row_index, column_index)
 
         main_layout.addLayout(grid_layout)
+
+        self.history_frame = QFrame()
+        self.history_frame.setObjectName("historyFrame")
+        self.history_frame.setFixedWidth(230)
+
+        history_layout = QVBoxLayout(self.history_frame)
+        history_layout.setContentsMargins(16, 16, 16, 16)
+        history_layout.setSpacing(10)
+
+        history_header = QHBoxLayout()
+
+        history_title = QLabel("Histórico")
+        history_title.setFont(QFont("Segoe UI Semibold", 16))
+
+        self.clear_history_button = QPushButton("Limpar")
+        self.clear_history_button.setObjectName("ghostButton")
+        self.clear_history_button.clicked.connect(self.clear_history)
+
+        history_header.addWidget(history_title)
+        history_header.addStretch()
+        history_header.addWidget(self.clear_history_button)
+
+        self.empty_history_label = QLabel("Nenhum cálculo ainda")
+        self.empty_history_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.empty_history_label.setStyleSheet("color: #7d7d7d; font-size: 13px;")
+
+        self.history_list = QListWidget()
+        self.history_list.setObjectName("historyList")
+        self.history_list.itemClicked.connect(self.load_history_item)
+
+        history_layout.addLayout(history_header)
+        history_layout.addWidget(self.empty_history_label, 1)
+        history_layout.addWidget(self.history_list, 1)
+
+        self.history_frame.hide()
+
+        root_layout.addWidget(calculator_widget, 1)
+        root_layout.addWidget(self.history_frame)
+
+    def create_history_icon(self, size: int = 22) -> QIcon:
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        pen = QPen(QColor("#3e3e3e"), 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+
+        arc_rect = QRectF(4, 4, size - 8, size - 8)
+        painter.drawArc(arc_rect, 35 * 16, 285 * 16)
+
+        painter.drawLine(QPointF(6.5, 7.0), QPointF(4.2, 4.7))
+        painter.drawLine(QPointF(6.5, 7.0), QPointF(6.6, 3.6))
+
+        center = QPointF(size / 2, size / 2)
+        painter.drawLine(center, QPointF(center.x(), center.y() - 4.0))
+        painter.drawLine(center, QPointF(center.x() + 3.4, center.y() + 1.8))
+
+        painter.end()
+        return QIcon(pixmap)
 
     def button_role(self, label: str) -> str:
         if label.isdigit() or label == ".":
@@ -398,6 +547,7 @@ class CalculatorWindow(QMainWindow):
             self.pending_operator = None
             self.waiting_for_new_operand = False
             self.reset_on_next_digit = True
+            self.add_history_entry(self.expression_text, self.current_entry)
             self.update_display()
             return
 
@@ -413,6 +563,7 @@ class CalculatorWindow(QMainWindow):
             self.current_entry = self.format_decimal(result)
             self.stored_operand = result
             self.reset_on_next_digit = True
+            self.add_history_entry(self.expression_text, self.current_entry)
             self.update_display()
 
     def apply_unary(self, action: str) -> None:
@@ -446,6 +597,7 @@ class CalculatorWindow(QMainWindow):
         else:
             self.expression_text = operation_text
 
+        self.add_history_entry(f"{self.expression_text} =", self.current_entry)
         self.update_display()
 
     def apply_percent(self) -> None:
@@ -561,6 +713,59 @@ class CalculatorWindow(QMainWindow):
         self.reset_on_next_digit = True
         self.error_state = True
         self.update_display()
+
+    def add_history_entry(self, expression: str, result: str) -> None:
+        if not expression.strip() or not result.strip() or self.error_state:
+            return
+
+        item = QListWidgetItem()
+        item.setData(Qt.ItemDataRole.UserRole, {"expression": expression, "result": result})
+
+        widget = HistoryEntryWidget(expression, result)
+        item.setSizeHint(widget.sizeHint())
+
+        self.history_list.insertItem(0, item)
+        self.history_list.setItemWidget(item, widget)
+
+        while self.history_list.count() > 30:
+            self.history_list.takeItem(self.history_list.count() - 1)
+
+        self.update_history_state()
+
+    def load_history_item(self, item: QListWidgetItem) -> None:
+        data = item.data(Qt.ItemDataRole.UserRole)
+        if not isinstance(data, dict):
+            return
+
+        result = data.get("result", "0")
+        expression = data.get("expression", "")
+
+        self.current_entry = result
+        self.expression_text = expression
+        self.stored_operand = self.current_decimal()
+        self.pending_operator = None
+        self.last_operator = None
+        self.last_operand = None
+        self.waiting_for_new_operand = False
+        self.reset_on_next_digit = True
+        self.error_state = False
+        self.update_display()
+
+    def clear_history(self) -> None:
+        self.history_list.clear()
+        self.update_history_state()
+
+    def update_history_state(self) -> None:
+        has_history = self.history_list.count() > 0
+        self.empty_history_label.setVisible(not has_history)
+        self.history_list.setVisible(has_history)
+        self.clear_history_button.setEnabled(has_history)
+
+    def toggle_history(self) -> None:
+        show_history = self.history_toggle_button.isChecked()
+        self.history_frame.setVisible(show_history)
+        target_width = self.expanded_width if show_history else self.compact_width
+        self.resize(target_width, self.height())
 
     def update_display(self) -> None:
         self.expression_label.setText(self.expression_text)
