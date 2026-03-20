@@ -153,8 +153,13 @@ class CalculatorWindow(QMainWindow):
         self.current_theme = "light"
 
         self.compact_width = 430
-        self.expanded_width = 720
+        self.layout_margin = 18
+        self.panel_spacing = 14
+        self.history_panel_width = 230
+        self.calculator_panel_width = self.compact_width - (self.layout_margin * 2)
+        self.expanded_width = self.compact_width + self.history_panel_width + self.panel_spacing
 
+        self.calculator_widget: QWidget
         self.expression_label: QLabel
         self.result_label: QLabel
         self.memory_indicator_label: QLabel
@@ -180,11 +185,14 @@ class CalculatorWindow(QMainWindow):
         self.setCentralWidget(root)
 
         root_layout = QHBoxLayout(root)
-        root_layout.setContentsMargins(18, 18, 18, 18)
-        root_layout.setSpacing(14)
+        root_layout.setContentsMargins(self.layout_margin, self.layout_margin, self.layout_margin, self.layout_margin)
+        root_layout.setSpacing(self.panel_spacing)
 
-        calculator_widget = QWidget()
-        main_layout = QVBoxLayout(calculator_widget)
+        self.calculator_widget = QWidget()
+        self.calculator_widget.setFixedWidth(self.calculator_panel_width)
+        self.calculator_widget.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+
+        main_layout = QVBoxLayout(self.calculator_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(12)
 
@@ -295,7 +303,7 @@ class CalculatorWindow(QMainWindow):
 
         self.history_frame = QFrame()
         self.history_frame.setObjectName("historyFrame")
-        self.history_frame.setFixedWidth(230)
+        self.history_frame.setFixedWidth(self.history_panel_width)
 
         history_layout = QVBoxLayout(self.history_frame)
         history_layout.setContentsMargins(16, 16, 16, 16)
@@ -330,8 +338,9 @@ class CalculatorWindow(QMainWindow):
 
         self.history_frame.hide()
 
-        root_layout.addWidget(calculator_widget, 1)
+        root_layout.addWidget(self.calculator_widget)
         root_layout.addWidget(self.history_frame)
+        root_layout.addStretch()
 
     def set_theme_from_toggle(self, checked: bool) -> None:
         self.current_theme = "dark" if checked else "light"
